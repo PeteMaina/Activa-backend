@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -83,6 +84,63 @@ public class AssetService
         return MapToDto(asset);
     }
 
+    public async Task<AssetDto> ScheduleMaintenanceAsync(Guid id, ScheduleMaintenanceRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var asset = await _repository.GetByIdAsync(id, cancellationToken);
+        if (asset == null)
+        {
+            throw new KeyNotFoundException($"Asset with ID '{id}' was not found.");
+        }
+
+        asset.ScheduleMaintenance(request.ScheduledDateUtc, request.Description, request.PerformedBy);
+        await _repository.UpdateAsync(asset, cancellationToken);
+
+        return MapToDto(asset);
+    }
+
+    public async Task<AssetDto> CompleteMaintenanceAsync(Guid id, CompleteMaintenanceRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var asset = await _repository.GetByIdAsync(id, cancellationToken);
+        if (asset == null)
+        {
+            throw new KeyNotFoundException($"Asset with ID '{id}' was not found.");
+        }
+
+        asset.CompleteMaintenance(request.CompletedDateUtc, request.Notes, request.PerformedBy);
+        await _repository.UpdateAsync(asset, cancellationToken);
+
+        return MapToDto(asset);
+    }
+
+    public async Task<DepreciationValuationDto> CalculateDepreciationAsync(Guid id, CalculateDepreciationRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var asset = await _repository.GetByIdAsync(id, cancellationToken);
+        if (asset == null)
+        {
+            throw new KeyNotFoundException($"Asset with ID '{id}' was not found.");
+        }
+
+        var salvageMoney = Money.Create(request.SalvageAmount, request.Currency);
+        var now = DateTimeOffset.UtcNow;
+        var valuation = asset.CalculateDepreciatedValue(salvageMoney, request.UsefulLifeYears, request.AcquisitionDate, now);
+
+        return new DepreciationValuationDto(
+            AssetId: asset.Id,
+            AssetCode: asset.Code,
+            InitialCost: asset.Cost.Amount,
+            CurrentValuation: valuation.Amount,
+            Currency: valuation.Currency,
+            UsefulLifeYears: request.UsefulLifeYears,
+            CalculationDateUtc: now
+        );
+    }
+
     private static AssetDto MapToDto(Asset asset)
     {
         var auditDtos = asset.AuditEntries
@@ -104,6 +162,9 @@ public class AssetService
             CreatedAtUtc: asset.CreatedAtUtc,
             CreatedBy: asset.CreatedBy,
             LastModifiedAtUtc: asset.LastModifiedAtUtc,
+            NextScheduledMaintenanceUtc: asset.NextScheduledMaintenanceUtc,
+            LastMaintenanceUtc: asset.LastMaintenanceUtc,
+            Tags: asset.Tags.ToList(),
             AuditEntries: auditDtos
         );
     }

@@ -23,6 +23,35 @@ public record UpdateAssetStatusRequest(
     string Reason
 );
 
+public record ScheduleMaintenanceRequest(
+    DateTimeOffset ScheduledDateUtc,
+    string Description,
+    string PerformedBy
+);
+
+public record CompleteMaintenanceRequest(
+    DateTimeOffset CompletedDateUtc,
+    string Notes,
+    string PerformedBy
+);
+
+public record CalculateDepreciationRequest(
+    decimal SalvageAmount,
+    string Currency,
+    int UsefulLifeYears,
+    DateTimeOffset AcquisitionDate
+);
+
+public record DepreciationValuationDto(
+    Guid AssetId,
+    string AssetCode,
+    decimal InitialCost,
+    decimal CurrentValuation,
+    string Currency,
+    int UsefulLifeYears,
+    DateTimeOffset CalculationDateUtc
+);
+
 public record AuditEntryDto(
     Guid Id,
     string Action,
@@ -46,6 +75,9 @@ public record AssetDto(
     DateTimeOffset CreatedAtUtc,
     string CreatedBy,
     DateTimeOffset LastModifiedAtUtc,
+    DateTimeOffset? NextScheduledMaintenanceUtc,
+    DateTimeOffset? LastMaintenanceUtc,
+    IReadOnlyList<string> Tags,
     IReadOnlyList<AuditEntryDto> AuditEntries
 );
 

@@ -11,6 +11,7 @@ public class Asset
 {
     private readonly List<AuditEntry> _auditEntries = new();
     private readonly List<IDomainEvent> _domainEvents = new();
+    private readonly HashSet<string> _tags = new(StringComparer.OrdinalIgnoreCase);
 
     public Guid Id { get; private set; }
     public string Code { get; private set; } = string.Empty;
@@ -22,9 +23,12 @@ public class Asset
     public DateTimeOffset CreatedAtUtc { get; private set; }
     public string CreatedBy { get; private set; } = string.Empty;
     public DateTimeOffset LastModifiedAtUtc { get; private set; }
+    public DateTimeOffset? NextScheduledMaintenanceUtc { get; private set; }
+    public DateTimeOffset? LastMaintenanceUtc { get; private set; }
 
     public IReadOnlyCollection<AuditEntry> AuditEntries => _auditEntries.AsReadOnly();
     public IReadOnlyCollection<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
+    public IReadOnlyCollection<string> Tags => _tags;
 
     private Asset() { }
 
@@ -82,6 +86,93 @@ public class Asset
 
         AddAuditEntry($"StatusTransition:{previousStatus}->{newStatus}", performedBy, reason);
         _domainEvents.Add(new AssetStatusChangedEvent(Id, previousStatus, newStatus, performedBy, reason));
+    }
+
+    public void ScheduleMaintenance(DateTimeOffset scheduledDateUtc, string description, string performedBy)
+    {
+        if (scheduledDateUtc <= DateTimeOffset.UtcNow)
+            throw new DomainValidationException("Scheduled maintenance date must be in the future.");
+        if (string.IsNullOrWhiteSpace(performedBy))
+            throw new DomainValidationException("PerformedBy identity is required.");
+
+        NextScheduledMaintenanceUtc = scheduledDateUtc;
+        LastModifiedAtUtc = DateTimeOffset.UtcNow;
+
+        AddAuditEntry("MaintenanceScheduled", performedBy, description);
+    }
+
+    public void CompleteMaintenance(DateTimeOffset completedDateUtc, string notes, string performedBy)
+    {
+        if (string.IsNullOrWhiteSpace(performedBy))
+            throw new DomainValidationException("PerformedBy identity is required.");
+
+        LastMaintenanceUtc = completedDateUtc;
+        NextScheduledMaintenanceUtc = null;
+        LastModifiedAtUtc = DateTimeOffset.UtcNow;
+
+        if (Status == AssetStatus.UnderMaintenance)
+        {
+            Status = AssetStatus.Active;
+        }
+
+        AddAuditEntry("MaintenanceCompleted", performedBy, notes);
+    }
+
+    public void AddTag(string tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag))
+            return;
+
+        var normalized = tag.Trim().ToUpperInvariant();
+        if (_tags.Add(normalized))
+        {
+            LastModifiedAtUtc = DateTimeOffset.UtcNow;
+        }
+    }
+
+    public void RemoveTag(string tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag))
+            return;
+
+        var normalized = tag.Trim().ToUpperInvariant();
+        if (_tags.Remove(normalized))
+        {
+            LastModifiedAtUtc = DateTimeOffset.UtcNow;
+        }
+    }
+
+    public Money CalculateDepreciatedValue(
+        Money salvageValue,
+        int usefulLifeYears,
+        DateTimeOffset acquisitionDate,
+        DateTimeOffset calculationDate)
+    {
+        if (usefulLifeYears <= 0)
+            throw new DomainValidationException("Useful life years must be greater than zero.");
+        if (salvageValue.Currency != Cost.Currency)
+            throw new DomainValidationException("Salvage value currency must match initial cost currency.");
+        if (salvageValue.Amount > Cost.Amount)
+            throw new DomainValidationException("Salvage value cannot exceed initial asset cost.");
+
+        if (calculationDate <= acquisitionDate)
+            return Cost;
+
+        var totalDaysInUsefulLife = usefulLifeYears * 365.25;
+        var elapsedDays = (calculationDate - acquisitionDate).TotalDays;
+
+        if (elapsedDays >= totalDaysInUsefulLife)
+            return salvageValue;
+
+        var depreciableAmount = Cost.Amount - salvageValue.Amount;
+        var annualDepreciation = depreciableAmount / usefulLifeYears;
+        var totalDepreciation = (decimal)(elapsedDays / 365.25) * annualDepreciation;
+
+        var remainingValue = Cost.Amount - totalDepreciation;
+        if (remainingValue < salvageValue.Amount)
+            remainingValue = salvageValue.Amount;
+
+        return Money.Create(Math.Round(remainingValue, 2), Cost.Currency);
     }
 
     public void ClearDomainEvents() => _domainEvents.Clear();

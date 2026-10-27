@@ -80,4 +80,30 @@ public class AssetsController : ControllerBase
         var result = await _assetService.UpdateAssetStatusAsync(id, request, cancellationToken);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Schedules a maintenance window for an asset.
+    /// </summary>
+    [HttpPost("{id:guid}/maintenance/schedule")]
+    [ProducesResponseType(typeof(AssetDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ScheduleMaintenance(Guid id, [FromBody] ScheduleMaintenanceRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _assetService.ScheduleMaintenanceAsync(id, request, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Calculates financial straight-line depreciation valuation for an asset.
+    /// </summary>
+    [HttpPost("{id:guid}/depreciation")]
+    [ProducesResponseType(typeof(DepreciationValuationDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CalculateDepreciation(Guid id, [FromBody] CalculateDepreciationRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _assetService.CalculateDepreciationAsync(id, request, cancellationToken);
+        return Ok(result);
+    }
 }

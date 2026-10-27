@@ -100,4 +100,32 @@ public class AssetsApiTests : IClassFixture<WebApplicationFactory<Program>>
         var updatedDto = await response.Content.ReadFromJsonAsync<AssetDto>();
         updatedDto!.Status.Should().Be(AssetStatus.UnderMaintenance);
     }
+
+    [Fact]
+    public async Task ScheduleMaintenanceAndCalculateDepreciation_ValidPayload_ShouldReturn200OK()
+    {
+        // Arrange
+        var createRequest = new CreateAssetRequest("API-AST-303", "Heavy Hydraulic Lift", "Machinery", 100000, "USD", "Site-1", "", null, null, "tester");
+        var createResponse = await _client.PostAsJsonAsync("/api/v1/assets", createRequest);
+        var createdDto = await createResponse.Content.ReadFromJsonAsync<AssetDto>();
+
+        // Act 1: Schedule Maintenance
+        var scheduleRequest = new ScheduleMaintenanceRequest(DateTimeOffset.UtcNow.AddDays(30), "Q3 Inspection", "lead-mechanic");
+        var scheduleResponse = await _client.PostAsJsonAsync($"/api/v1/assets/{createdDto!.Id}/maintenance/schedule", scheduleRequest);
+
+        // Assert 1
+        scheduleResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var scheduledDto = await scheduleResponse.Content.ReadFromJsonAsync<AssetDto>();
+        scheduledDto!.NextScheduledMaintenanceUtc.Should().NotBeNull();
+
+        // Act 2: Calculate Depreciation
+        var depRequest = new CalculateDepreciationRequest(10000, "USD", 10, DateTimeOffset.UtcNow.AddYears(-2));
+        var depResponse = await _client.PostAsJsonAsync($"/api/v1/assets/{createdDto.Id}/depreciation", depRequest);
+
+        // Assert 2
+        depResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var depValuation = await depResponse.Content.ReadFromJsonAsync<DepreciationValuationDto>();
+        depValuation.Should().NotBeNull();
+        depValuation!.CurrentValuation.Should().BeLessThan(100000);
+    }
 }
