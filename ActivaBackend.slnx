@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Activa.Api/Activa.Api.csproj" />
+    <Project Path="src/Activa.Core/Activa.Core.csproj" />
+    <Project Path="src/Activa.Infrastructure/Activa.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Activa.Api.Tests/Activa.Api.Tests.csproj" />
+    <Project Path="tests/Activa.Core.Tests/Activa.Core.Tests.csproj" />
+  </Folder>
+</Solution>
